@@ -16,19 +16,35 @@ class Rogowski:
         #remove offset from data by subtracting average in initial first few hundred points in trace
         self.data -= np.mean(self.data[0:200])
         
-        #calculate current start from raw signals
+        #characterise nosie = first 1000 points
+        noiseValues = 1000
         self.currentStart = 0
-        noiseMax = max(self.data[0:200])*self.attenuator    #first few hundred are noise so use that to find maximum noise
-        #find the point where we go above the noise more than 50 times in a row - to ensure this is the true signal
+        threshold = max(self.data[0:noiseValues])*self.attenuator    #first few hundred are noise so use that to find maximum noise
+        self.noise_range = max(self.data[0:noiseValues]) - min(self.data[0:noiseValues])
+        
+        #find the point where we go above zero more than 50 times in a row
+        #to ensure this is the true signal
         posCount = 50   #how many positives we need
-        currentStartPos = 200   #current position to check
+        currentStartPos = noiseValues   #current position to check
         positives = 0;
         while self.currentStart==0:
-            currentStartPos = currentStartPos+1;
-            if self.data[currentStartPos]*self.attenuator >noiseMax:
+            currentStartPos += 1;
+            if self.data[currentStartPos]*self.attenuator > threshold:
                 positives = positives+1
                 if positives>posCount:
                     currentStartPos -= posCount
                     self.currentStart = self.time[currentStartPos]
+                    break
             else:
                 positives = 0
+        
+        #calculate the error by taking the max of the noise and seeing how
+        #long till our signal passes that value
+        noiseCrossTime = 0
+        while currentStartPos<len(self.data):
+            if self.data[currentStartPos]*self.attenuator >threshold+self.noise_range*self.attenuator:
+                noiseCrossTime = self.time[currentStartPos]
+                break
+            currentStartPos += 1;
+            
+        self.currentStart_error = noiseCrossTime - self.currentStart

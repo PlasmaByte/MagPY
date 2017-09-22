@@ -21,9 +21,14 @@ class MAGPIE:
         
         #get average current start from rogowskis
         self.currentStart = 0   #in ns
+        self.currentStart_error = 0
+        error_per_value = 0
         for rog in self.rogowskis:
             self.currentStart += rog.currentStart
+            self.currentStart_error += rog.currentStart_error
+            error_per_value += np.abs( rog.noise_range*rog.attenuator*rog.multiplier )
         self.currentStart /= len(self.rogowskis)
+        self.currentStart_error /= len(self.rogowskis)
         
         #get dIdt which is a combination of both traces
         self.time = self.rogowskis[0].time
@@ -34,46 +39,89 @@ class MAGPIE:
 
         #integrate dIdt to get current
         currentStartPos = int(len(self.dIdt)*(self.currentStart-self.time[0])/(self.time[-1]-self.time[0]))
-        self.dIdt[:currentStartPos] = 0     #set current before start to zero to ignore initial nosie - is this realistic???
-        #self.current = scipy.integrate.cumtrapz( self.dIdt ,self.time )/1e9   #1e9 as time is in ns
+        self.dIdt[:currentStartPos] = 0     #set current before start to zero to ignore initial nosie - is this realistic???        
         
         self.current = [0]
-        for i in range(1,len(self.dIdt)):
+        self.current_error = [0]
+        for i in range(1,len(self.dIdt)):   #yeah! manual integration!!!
             dt = (self.time[i]-self.time[i-1])/1e9
             self.current.append( self.current[i-1] + self.dIdt[i]*dt )
+            if self.time[i]<self.currentStart:
+                self.current_error.append(0)
+            else:
+                self.current_error.append( self.current_error[i-1] + error_per_value*dt)        
 
-        #self.current = np.append(self.current, self.current[-1] )  #adds extra index to match length of time
+        #calculate error arrays = min and max currents at all times - for calculating errors
+        errorsMin = np.array(self.current) - np.array(self.current_error)
+        errorsMax = np.array(self.current) + np.array(self.current_error)
 
         #get max current and peak time
         self.currentMax = max(self.current[:5000])
-        self.currentPeak = self.time[np.argmax(self.current[:5000])]
-    
-        #estimate FWHM from current trace
-        self.currentFWHM = 0
-        currentFWHMstart = 0
+        currentMax_position = np.argmax(self.current[:5000])
+        self.currentMax_error = ( max(errorsMax[:5000]) - max(errorsMin[:5000]) )/2
+        self.currentPeak = self.time[currentMax_position]
+        
+        #error on peak time is width of top section
+        # = time errror max > max (errorMin)
+        min_current_peak = max(errorsMin)
+        current_peak_start = 0
+        self.current_peak_error = 0
+        for i in range(1,len(self.current)):
+            if errorsMax[i]>min_current_peak and current_peak_start==0:
+                current_peak_start = self.time[i]
+            if errorsMax[i]<min_current_peak and current_peak_start>0:
+                self.current_peak_error = (self.time[i]-current_peak_start)/2
+                break
+        
+        #estimate FWFM from current trace
+        #get FWFM error from width of FWFM of errormax
+        self.currentFWFM = 0
+        self.currentFWFM_error = 0
+        currentFWFMstart = 0
+        currentFWFMstart_error = 0
+        FWFM_error_current = self.currentMax-self.currentMax_error
         pos = 200
-        while self.currentFWHM==0 and pos<len(self.current)-5:
+        while (self.currentFWFM==0 or self.currentFWFM_error==0) and pos<len(self.current)-5:
             pos = pos+1;
-            if currentFWHMstart==0:
+            if currentFWFMstart==0:
                 #find the first point we consistently pass the threshold
                 if self.current[pos]>self.currentMax/2 and self.current[pos+1]>self.currentMax/2:
-                    currentFWHMstart = pos
+                    currentFWFMstart = pos
             else:
                 #find the point we fall bellow the threshold
                 if self.current[pos]<self.currentMax/2 and self.current[pos+1]<self.currentMax/2:
-                    self.currentFWHM = (self.time[pos]-self.time[currentFWHMstart])
+                    self.currentFWFM = (self.time[pos]-self.time[currentFWFMstart])
+                    
+            if currentFWFMstart_error==0:
+                #find the first point we consistently pass the threshold
+                if errorsMax[pos]>FWFM_error_current/2 and errorsMax[pos+1]>FWFM_error_current/2:
+                    currentFWFMstart_error = pos
+            else:
+                #find the point we fall bellow the threshold
+                if errorsMax[pos]<FWFM_error_current/2 and errorsMax[pos+1]<FWFM_error_current/2:
+                    #store maximum FWFM here for a moment
+                    self.currentFWFM_error = (self.time[pos]-self.time[currentFWFMstart_error])
+                    
+        self.currentFWFM_error = self.currentFWFM_error-self.currentFWFM
         
         print("MAGPIE loaded for shot "+shotID)
-        print("Current start = "+str(self.currentStart)+" ns with FWHM = "+str(self.currentFWHM)+" ns")
-        print("Current maximum = "+str(self.currentMax)+" A at "+str(self.currentPeak)+" ns")
+        print("Current start = "+str(self.currentStart)+" +- "+str(self.currentStart_error)+" ns")
+        print("FWHM = "+str(self.currentFWFM)+" +- "+str(self.currentFWFM_error)+" ns")
+        print("Current maximum = "+str(self.currentMax)+" +- "+str(self.currentMax_error)+" A")
+        print("Current peak at "+str(self.currentPeak)+" +- "+str(self.current_peak_error)+" ns")
         
         #save to file
         filename = "Data/"+shotID+"/MAGPIE"
         with open(filename, 'w') as file:   #writes file
             file.write( "current start (ns) = "+str(self.currentStart)+"\n" )
-            file.write( "current maximum = "+str(self.currentMax)+"\n" )
-            file.write( "current FWHM (ns) = "+str(self.currentFWHM)+"\n" )
-            file.write( "current peak (ns) = "+str(self.currentPeak)+"\n" )
+            file.write( "current maximum (A) = "+str(self.currentMax)+"\n" )
+            file.write( "current FWFM (ns) = "+str(self.currentFWFM)+"\n" )
+            file.write( "current peak time (ns) = "+str(self.currentPeak)+"\n" )
+            file.write( "\n" )
+            file.write( "current start error (ns) = "+str(self.currentStart_error)+"\n" )
+            file.write( "current maximus error (A) = "+str(self.currentMax_error)+"\n" )
+            file.write( "current FWFM error (ns) = "+str(self.currentFWFM_error)+"\n" )
+            file.write( "current peak time error (ns) = "+str(self.current_peak_error)+"\n" )
         
         
         
@@ -102,7 +150,7 @@ class MAGPIE:
         
         
         
-    def plot(self, plotType='current', ax=None, label=None, color=None, linestyle=None):
+    def plot(self, plotType='current', ax=None, label=None, color=None, linestyle=None, times = [1000,2500]):
         if ax is None:  #create plot if none exists
             fig, ax=plt.subplots()
             
@@ -124,6 +172,12 @@ class MAGPIE:
         if label is not None:   #set labels if we pass them to the function
             label1 = label
             
+        #plot errors in current case
+        if "current" in plotType.lower():
+            errorsMin = np.array(self.current) - np.array(self.current_error)
+            errorsMax = np.array(self.current) + np.array(self.current_error)
+            ax.fill_between(self.time, errorsMin,errorsMax, alpha=.5)
+            
         if data1 is not None:
             ax.plot(self.time, data1, label=label1,color=color,linestyle=linestyle)
         if data2 is not None:
@@ -131,7 +185,7 @@ class MAGPIE:
 
         #set axis
         ax.set_xlabel("Time [ns]")
-        ax.set_xlim( [1000,2500] )
+        ax.set_xlim( times )
         ax.legend()
         if "current" in plotType.lower():
             ax.set_title("MAGPIE current for "+self.shotID)
@@ -142,5 +196,5 @@ class MAGPIE:
         if "raw" in plotType.lower() or "voltage" in plotType.lower():
             ax.set_title("Raw signal voltages for Rogowski probes for "+self.shotID)
             ax.set_ylabel("Voltage [V]")
-        
+ 
         return ax

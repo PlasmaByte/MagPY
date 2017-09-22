@@ -8,33 +8,61 @@ import numpy as np
 from scipy.ndimage.interpolation import rotate
 from scipy.ndimage.interpolation import shift
 from copy import deepcopy
+from SourceCode.ShotData import ShotData
 
 
 
 class Multiframe:
-    def __init__(self, file=None, shotData=None):
-        #defaults
-        self.shotData = shotData
+    def __init__(self, shotID="", shotData=None, file=None):
+        #class variable defaults
+        self.shotID = shotID
         self.frames = 12
         self.startTime = 0      #ns
+        self.frameTimes = []    #ns
         self.interFrame = 100   #ns
-        self.exposure = 0      #ns
+        self.exposure = 0       #ns
         self.scale = 90         #pixels/mm
         self.angle = 0          #degrees
         self.offset = (0,0)     #mm
+        self.flipLR = False
+        self.flipUD = False
         
-        self.shotImagesPath = []    #stores paths of these images for later loading
-        self.backImagesPath = []            
+        if shotData is None:    #find the shotdata folder on Linna
+            self.shotData = ShotData(shotID)
+
+        self.relativeOffsets = []
+        self.intensities = []
+        self.shotImagesPath = []
+        self.backImagesPath = []
 
         if file is not None:
+            #read the file if we have it
             self.readData(file)
-        if self.shotData is not None:
-            self.loadImages(self.shotData)
-            
-        #assumes equal frame spacing
-        self.frameTimes = np.arange(self.startTime, self.startTime+12*self.interFrame, self.interFrame)
+        else:
+            #find file and load its data
+            path = "Data/"+self.shotID
+            fileName = None
+            for subfile in os.listdir(path):
+                if "multiframe" in subfile.lower():
+                    fileName = path+"/"+subfile
+                    print("Multiframe file found: "+fileName)
+            if fileName is None:
+                print("No multiframe file found")
+            else:
+                with open(fileName) as file:
+                    self.readData(file)
+
+        #complete frame times with equal interfram
+        if len(self.frameTimes)==0:
+            self.frameTimes.append(self.startTime)
+        while len(self.frameTimes)<self.frames:
+            self.frameTimes.append( self.frameTimes[-1]+self.interFrame )
+        print(self.frameTimes)
+
+        #get the image paths
+        self.find_images()
         
-        #create array for storing images
+        #creates arrays for storing images
         self.shotImages = [None]*self.frames
         self.backImages = [None]*self.frames
         self.shotImagesRaw = [None]*self.frames #stores unrotated and unshifted images
@@ -42,43 +70,55 @@ class Multiframe:
         
             
             
-    def readData(self,file):
-        #read data from file till we reach the next import keyword
-        for line in file:
-
+    def readData(self,file):       
+        #read the file line by line
+        for l in file:
+            line = l.lower()
             if "frames" in line:
                 self.frames = int(line.split('=')[1].strip())
-                
             if "inter frame" in line:
                 self.interFrame = float(line.split('=')[1].strip() )
-                
             if "start time" in line:
                 self.startTime = float(line.split('=')[1].strip() )
-                
             if "exposure" in line:
                 self.exposure = float(line.split('=')[1].strip() )
-                
             if "scale" in line:
                 self.scale = float(line.split('=')[1].strip() )
-                
             if "angle" in line:
                 self.angle = float(line.split('=')[1].strip() )
-                
             if "offset" in line:
                 temp = line.split('=')[1].strip() 
                 self.offset = ( float(temp.split(',')[0]), float(temp.split(',')[1]) )
-            
+            if "frame times" in line:
+                #load specific frame times seperated by commas
+                subline = line.split('=')[1].strip()
+                comma_seperated = subline.split(',')
+                for c in comma_seperated:
+                    self.frameTimes.append( float(c.strip()) )
+            if "fliplr" in line:
+                self.flipLR = True;
+            if "flipud" in line:
+                self.flipUD = True;
+                
             if "<end>" in line.lower():
                 break
+        
+            #get frame relative offsets
+            contents = line.split('\t')
+            if len(contents)==4:
+                if "frame" not in contents[0]:
+                    self.relativeOffsets.append( np.array([ float(contents[1]) , float(contents[2]) ]) )
+                    self.intensities.append( float(contents[3]) )
                 
                 
                 
-    def loadImages(self, shotData):
+                
+    def find_images(self):
         #finds the images using the shotData class
         self.folder = ""
-        for subfolder in os.listdir(shotData.path):
+        for subfolder in os.listdir(self.shotData.path):
             if "fast frame" in subfolder.lower() or "fast-frame" in subfolder.lower() or "12 frame" in subfolder.lower() or "12-frame" in subfolder.lower() or "multiframe" in subfolder.lower():
-                self.folder = shotData.path+"/"+subfolder
+                self.folder = self.shotData.path+"/"+subfolder
                 
         if self.folder == "":
             print("No multiframe folder found")
@@ -153,6 +193,12 @@ class Multiframe:
 
         image = rotate( image, self.angle )     #apply rotation
         #offset = ( self.relativeOffsets(frame)[0]+self.offset[0]*self.scale , self.relativeOffsets(frame)[1]+self.offset[1]*self.scale )
+        
+        #apply flips
+        if self.flipLR is True:
+            image = np.fliplr(image)
+        if self.flipUD is True:
+            image = np.flipud(image)
         
         offset = -self.getRelativeOffset(frame)
         offset = np.fliplr([offset])[0]
@@ -272,7 +318,7 @@ class Multiframe:
         
     def getRelativeOffset(self, frame):
         #returns offset in mm
-        if hasattr(self, 'relativeOffsets'):    #return the correct offset if we've already loaded this file
+        if len(self.relativeOffsets)>0:    #return the correct offset if already loaded
             return self.relativeOffsets[frame-1]
 
         #load the relative offset file
@@ -284,7 +330,7 @@ class Multiframe:
                 fileName = path+"/"+subfile
         if fileName is None: #default file
             fileName = "Data/Multiframe Relative Offsets"
-            print("No file found - using default")
+            print("No relative offsets found - using default")
         
         #load the file and save relative offsets
         self.relativeOffsets = []
