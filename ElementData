@@ -1,0 +1,12 @@
+Symbol	Name	Number	Mass
+H	Hydrogen	1	1.008
+He	Helium	2	4.0026
+C	Carbon	6	12.011
+N	Nitrogen	7	14.0067
+Ne	Neon	10	20.1797
+Ar	Argon	18	39.948
+Kr	Krypton	36	83.798
+Xe	Xenon	54	131.29
+Rn	Radon	86	222
+
+#atomic mass from https://en.wikipedia.org/wiki/Standard_atomic_weight

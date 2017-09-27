@@ -36,14 +36,15 @@ class Multiframe:
         self.shotImagesPath = []
         self.backImagesPath = []
 
-        if fileName is None:
+        #find the data
+        self.fileName = fileName
+        if self.fileName is None:
             #find file
             self.fileName = None
             for subfile in os.listdir("Data/"+self.shotID):
                 if "multiframe" in subfile.lower():
                     self.fileName = subfile
-                    print("Multiframe file found: "+self.fileName)
-                    
+                    print("Multiframe file found: "+self.fileName)            
         self.readData()
 
         #complete frame times with equal interfram

@@ -2,58 +2,60 @@
 #class for looking up atomic data
 
 import numpy
-import matplotlib.pyplot as plt
+import os.path
+
+def is_element(label="H"):
+    #load the data searching for the row corresponding to the letter, name or number
+    dataFile = "SourceCode/ElementData"
+    if os.path.exists(dataFile) is False:
+        print("AHHH! ElementData file not found!")
+        return
+    
+    with open(dataFile) as file:
+        for line in file:
+            contents = line.split('\t')
+            if contents[0].lower()==label or contents[1].lower()==label or int(contents[2])==label:
+                return True
+    return False
+
+
 
 class Element:
-    def __init__(self, symbol="H"):
-        self.symbol = symbol
-        return
+    def __init__(self, label="H"):
         
-    def name(self):
-        dic = {
-            'H' : "Hydrogen",
-            'He' : "Helium",
-            'C' : "Carbon",
-            'N' : "Nitrogen",
-            'Ne' : "Neon",
-            'Ar' : "Argon",
-            'Kr' : "Krypton",
-            'Xe' : "Xenon",
-            'Rn' : "Radon",
-        }
-        return dic.setdefault(self.symbol, "None")
+        self.symbol = None
+        self.name = None
+        self.atomic_number = None
+        self.atomic_mass = None
+        
+        #load the data searching for the row corresponding to the letter, name or number
+        dataFile = "SourceCode/ElementData"
+        if os.path.exists(dataFile) is False:
+            print("AHHH! ElementData file not found!")
+            return
+        
+        with open(dataFile) as file:
+            for line in file:
+                if "Symbol" not in line:
+                    contents = line.split('\t')
     
-    def atomic_mass(self):
-        #https://en.wikipedia.org/wiki/Standard_atomic_weight
-        dic = {
-            'H' : 1.008,
-            'He' : 4.0026,
-            'C' : 12.011,
-            'N' : 14.0067,
-            'Ne' : 20.1797,
-            'Ar' : 39.948,
-            'Kr' : 83.798,
-            'Xe' : 131.29,
-            'Rn' : 222,
-        }
-        return dic.setdefault(self.symbol, 1)
-    
-    def atomic_number(self):
-        dic = {
-            'H' : 1,
-            'He' : 2,
-            'C' : 6,
-            'N' : 7,
-            'Ne' : 10,
-            'Ar' : 18,
-            'Kr' : 36,
-            'Xe' : 54,
-            'Rn' : 86,
-        }
-        return dic.setdefault(self.symbol, 1)
+                    if contents[0].lower()==label or contents[1].lower()==label or int(contents[2])==label:
+                        self.symbol = contents[0]
+                        self.name = contents[1]
+                        self.atomic_number = int(contents[2])
+                        self.atomic_mass = float(contents[3])
+                        print(self.name+" data loaded")
+                        break
+                
+                
+    def protons(self):
+        return self.atomic_number
+        
+    def neutrons(self):
+        return self.atomic_mass - self.atomic_number
 
     def ionization(self, temperature ):
         #temperature in eV
         #aproximation taken from P. Drake book
         ion = numpy.sqrt(20*temperature/1000)
-        return min( self.atomic_number() ,ion)
+        return min( self.atomic_number,ion)
