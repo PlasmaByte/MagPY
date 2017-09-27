@@ -9,11 +9,12 @@ from scipy.ndimage.interpolation import rotate
 from scipy.ndimage.interpolation import shift
 from copy import deepcopy
 from SourceCode.ShotData import ShotData
+from scipy import stats
 
 
 
 class Multiframe:
-    def __init__(self, shotID="", shotData=None, file=None):
+    def __init__(self, shotID="", shotData=None, fileName=None):
         #class variable defaults
         self.shotID = shotID
         self.frames = 12
@@ -35,29 +36,21 @@ class Multiframe:
         self.shotImagesPath = []
         self.backImagesPath = []
 
-        if file is not None:
-            #read the file if we have it
-            self.readData(file)
-        else:
-            #find file and load its data
-            path = "Data/"+self.shotID
-            fileName = None
-            for subfile in os.listdir(path):
+        if fileName is None:
+            #find file
+            self.fileName = None
+            for subfile in os.listdir("Data/"+self.shotID):
                 if "multiframe" in subfile.lower():
-                    fileName = path+"/"+subfile
-                    print("Multiframe file found: "+fileName)
-            if fileName is None:
-                print("No multiframe file found")
-            else:
-                with open(fileName) as file:
-                    self.readData(file)
+                    self.fileName = subfile
+                    print("Multiframe file found: "+self.fileName)
+                    
+        self.readData()
 
         #complete frame times with equal interfram
         if len(self.frameTimes)==0:
             self.frameTimes.append(self.startTime)
         while len(self.frameTimes)<self.frames:
             self.frameTimes.append( self.frameTimes[-1]+self.interFrame )
-        print(self.frameTimes)
 
         #get the image paths
         self.find_images()
@@ -70,46 +63,52 @@ class Multiframe:
         
             
             
-    def readData(self,file):       
-        #read the file line by line
-        for l in file:
-            line = l.lower()
-            if "frames" in line:
-                self.frames = int(line.split('=')[1].strip())
-            if "inter frame" in line:
-                self.interFrame = float(line.split('=')[1].strip() )
-            if "start time" in line:
-                self.startTime = float(line.split('=')[1].strip() )
-            if "exposure" in line:
-                self.exposure = float(line.split('=')[1].strip() )
-            if "scale" in line:
-                self.scale = float(line.split('=')[1].strip() )
-            if "angle" in line:
-                self.angle = float(line.split('=')[1].strip() )
-            if "offset" in line:
-                temp = line.split('=')[1].strip() 
-                self.offset = ( float(temp.split(',')[0]), float(temp.split(',')[1]) )
-            if "frame times" in line:
-                #load specific frame times seperated by commas
-                subline = line.split('=')[1].strip()
-                comma_seperated = subline.split(',')
-                for c in comma_seperated:
-                    self.frameTimes.append( float(c.strip()) )
-            if "fliplr" in line:
-                self.flipLR = True;
-            if "flipud" in line:
-                self.flipUD = True;
-                
-            if "<end>" in line.lower():
-                break
+    def readData(self):
+        path = "Data/"+self.shotID
         
-            #get frame relative offsets
-            contents = line.split('\t')
-            if len(contents)==4:
-                if "frame" not in contents[0]:
-                    self.relativeOffsets.append( np.array([ float(contents[1]) , float(contents[2]) ]) )
-                    self.intensities.append( float(contents[3]) )
-                
+        if self.fileName is None:
+            print("No multiframe file found")
+            return
+        
+        with open(path+"/"+self.fileName) as file:
+            #read the file line by line
+            for l in file:
+                line = l.lower()
+                if "frames" in line:
+                    self.frames = int(line.split('=')[1].strip())
+                if "inter frame" in line:
+                    self.interFrame = float(line.split('=')[1].strip() )
+                if "start time" in line:
+                    self.startTime = float(line.split('=')[1].strip() )
+                if "exposure" in line:
+                    self.exposure = float(line.split('=')[1].strip() )
+                if "scale" in line:
+                    self.scale = float(line.split('=')[1].strip() )
+                if "angle" in line:
+                    self.angle = float(line.split('=')[1].strip() )
+                if "offset" in line:
+                    temp = line.split('=')[1].strip() 
+                    self.offset = ( float(temp.split(',')[0]), float(temp.split(',')[1]) )
+                if "frame times" in line:
+                    #load specific frame times seperated by commas
+                    subline = line.split('=')[1].strip()
+                    comma_seperated = subline.split(',')
+                    for c in comma_seperated:
+                        self.frameTimes.append( float(c.strip()) )
+                if "fliplr" in line:
+                    self.flipLR = True;
+                if "flipud" in line:
+                    self.flipUD = True;
+                    
+                if "<end>" in line.lower():
+                    break
+            
+                #get frame relative offsets
+                contents = line.split('\t')
+                if len(contents)==4:
+                    if "frame" not in contents[0]:
+                        self.relativeOffsets.append( np.array([ float(contents[1]) , float(contents[2]) ]) )
+                        self.intensities.append( float(contents[3]) )
                 
                 
                 
@@ -117,8 +116,16 @@ class Multiframe:
         #finds the images using the shotData class
         self.folder = ""
         for subfolder in os.listdir(self.shotData.path):
-            if "fast frame" in subfolder.lower() or "fast-frame" in subfolder.lower() or "12 frame" in subfolder.lower() or "12-frame" in subfolder.lower() or "multiframe" in subfolder.lower():
+            if ("fast frame" in subfolder.lower() or "fast-frame" in subfolder.lower()
+                or "12 frame" in subfolder.lower() or "12-frame" in subfolder.lower()
+                or "multiframe" in subfolder.lower()) :
                 self.folder = self.shotData.path+"/"+subfolder
+        
+        #if we can't find something explicitly labelled just take any folder!
+        if self.folder == "":
+            for subfolder in os.listdir(self.shotData.path):
+                if os.path.isdir(self.shotData.path+"/"+subfolder):
+                    self.folder = self.shotData.path+"/"+subfolder
                 
         if self.folder == "":
             print("No multiframe folder found")
@@ -237,8 +244,14 @@ class Multiframe:
         
 
                         
-    def plot(self, frame=1, plotType="shot", crop=None, clim=None, vmin=None, vmax=None):
-        image = self.getImage(frame,imageType=plotType)
+    def plot(self, frame=1, plotType="shot", crop=None, clim=None, vmin=None, 
+             vmax=None, normalize=True):
+        
+        image = None
+        if normalize is True:
+            image = self.normalized(frame, imageType=plotType)
+        else:
+            image = self.getImage(frame, imageType=plotType)
         
         fig, ax = plt.subplots()
         extent = self.getImageExtent(plotType)
@@ -406,3 +419,21 @@ class Multiframe:
             file.write( "\nFrame\tPixels X\tPixels Y\tIntensity\n" )
             for i in range(0,self.frames):
                 file.write( str(i)+"\t"+str((points[i])[0])+"\t"+str((points[i])[1])+"\t"+str(intensities[i])+"\n" )
+                
+                
+                
+    def lineout(self, frame, line, thickness=0.1, demo=False):
+        import skimage.measure
+        #line is a 4 element array [x1,x2,y1,y2] in mm
+        line_pix = self.convertToPixel(deepcopy(line))
+        image = self.getImage(frame)
+        thickness *= self.scale #convert to pixels
+        lineout = skimage.measure.profile_line( image, (line_pix[2],line_pix[0]),
+                                               (line_pix[3],line_pix[1]), linewidth=thickness )
+        
+        if demo is True:    #if in demo mode plot the image and draw on the lineout
+            ax = self.plot(frame)
+            ax.plot( [line[0], line[1]], [line[2], line[3]], 'w--' )  # plot lines
+        
+        return lineout
+        

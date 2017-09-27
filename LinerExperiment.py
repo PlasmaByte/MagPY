@@ -7,6 +7,7 @@ from SourceCode.BdotPair import BdotPair
 from SourceCode.Interferometry import Interferometry
 from SourceCode.MAGPIE import MAGPIE
 from SourceCode.Gases import Gases
+from SourceCode.Shock import Shock
 import skimage.measure
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,6 +19,7 @@ class LinerExperiment:
     def __init__(self, shotID):
         #find the shotdata folder on Linna
         self.shotData = ShotData(shotID)
+        path = "Data/"+self.shotID
         
         #variables with defaults
         self.dataPath = "Data/"+shotID+"/"
@@ -26,13 +28,19 @@ class LinerExperiment:
         self.gasFill = "Argon"
         self.gasPressure = 24
         
-        #diagnostics
-        self.multiframe = None
-        self.bdotPairs = []
-        self.interferometry = []
-        
         #load up MAGPIE class
         self.MAGPIE = MAGPIE(shotID)
+        
+        #load subfiles
+        self.shocks = []
+        self.multiframe = []
+        self.bdotPairs = []
+        self.interferometry = []
+        for subfile in os.listdir(path):
+            if "shock dynamics" in subfile.lower():
+                self.shock.append( Shock(shotID, fileName=subfile) )
+            if "multiframe" in subfile.lower():
+                self.multiframe.append( Multiframe(shotID, fileName=subfile) )
 
         #find liner experiment file and load its data
         filename = self.dataPath+"Liner Experiment"
@@ -56,10 +64,6 @@ class LinerExperiment:
                     
                 if "gas pressure" in line:
                     self.gasPressure = float(line.split('=')[1].strip())
-                    
-                if "<multiframe>" in line:    #setup multiframe
-                    print("load Multiframe")
-                    self.multiframe = Multiframe(file=file, shotData=self.shotData)
                     
                 if "<interferometry>" in line:    #setup interferometry
                     print("load Interferometry")
