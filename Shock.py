@@ -22,47 +22,61 @@ class Shock:
             self.label = fileName.replace("Shock Dynamics","")
             self.label.strip()
         
-        self.times = []             #ns
-        self.positions = []         #mm
-        self.velocity = 0           #km/s
-        self.velocity_error = 0     #km/s
-        self.start_time = 0         #ns
-        self.start_time_error = 0   #ns
-        
+        self.times = []             #ns (absolute)
+        self.positions = []         #mm        
         self.load_positions(fileName)
         
         
-        
-    def calculate_velocity(self, current_start=1520, start_position=5.6, silent=False):
-        slope, intercept, r_value, p_value, std_err = stats.linregress( self.times,self.positions)
-        self.velocity = slope*1000 #defined in km/s
-        self.velocity_error = std_err*1000
-        self.start_time = (start_position-intercept)/slope - current_start
-        
-        #determine start time error by calculating min and max time from worst slopes, going through average x and y
-        t_mean = numpy.mean(self.times) - current_start
-        p_mean = numpy.mean(self.positions)
-        start_time_min = t_mean - (p_mean-start_position)/(slope+std_err)
-        start_time_max = t_mean - (p_mean-start_position)/(slope-std_err)
-        self.start_time_error = abs(start_time_max-start_time_min)/2
-        
-        if silent is False:
-            print("Velocity: "+str(self.velocity)+" +- "+str(self.velocity_error)+" km/s")
-            print("Start time: "+str(self.start_time)+" +- "+str(self.start_time_error)+" ns")
-            print("== Linear fit data ==")
-            print("Slope: "+str(slope))
-            print("Intercept: "+str(intercept))
-            print("R value: "+str(r_value))
-            print("P value: "+str(p_value))
-            print("Standard error: "+str(std_err))
-            print("\n")
 
+    def velocity(self, error=False):
+        #returns velocity in km/s
+        slope, intercept, r_value, p_value, std_err = stats.linregress( self.times,self.positions)
+        print("Velocity: "+str(slope*1000)+" km/s")
+        if error is True:
+            return std_err*1000
+        else:
+            return slope*1000
+
+        
+        
+    def fit(self):
+        #returns R^2 value
+        slope, intercept, r_value, p_value, std_err = stats.linregress( self.times,self.positions)
+        return r_value*r_value
+        
+    
+            
+    def position_at(self, time, error=False):
+        #returns position in mm for given time in ns
+        slope, intercept, r_value, p_value, std_err = stats.linregress( self.times, self.positions)
+        position = time*slope + intercept
+        print(str(position)+" mm at "+str(time)+" ns")
+        return position
+       
+        
+    
+    def time_at(self, position, error=False):
+        #returns time in ns for given position in mm
+        slope, intercept, r_value, p_value, std_err = stats.linregress( self.times, self.positions)
+        time = (position-intercept)/slope
+#        #determine start time error by calculating min and max time from worst slopes, going through average x and y
+#        t_mean = numpy.mean(self.times)
+#        p_mean = numpy.mean(self.positions)
+#        start_time_min = t_mean - (p_mean-start_position)/(slope+std_err)
+#        start_time_max = t_mean - (p_mean-start_position)/(slope-std_err)
+#        self.start_time_error = abs(start_time_max-start_time_min)/2
+        print(str(position)+" mm at "+str(time)+" ns")
+        return time
+    
 
 
     def __str__(self):  #output from print function
-        self.calculate_velocity()
+        print("Velocity: "+str(self.velocity())+" +- "+str(self.velocity(error=True))+" km/s")
+        print("R^2 value: "+str(self.fitR2))
+        print("\n")
         return ""
         
+    
     
     def clear(self):
         self.times = []
@@ -73,7 +87,7 @@ class Shock:
         self.times = numpy.concatenate( (self.times, other_shock.times), 0)
         new_positions = numpy.array(other_shock.positions)*multiplier
         self.positions = numpy.concatenate( (self.positions, new_positions), 0)
-        self.calculate_velocity(silent=True)
+
 
 
     def load_positions(self, fileName=None):
@@ -103,16 +117,16 @@ class Shock:
         with open(path+"/"+fileName) as file:
             for l in file:
                 line = l.lower()
-                if "velocity" in line:
-                    if "error" in line:
-                        self.velocity_error = float(line.split('=')[1].strip())
-                    else:
-                        self.velocity = float(line.split('=')[1].strip())
-                if "start" in line:
-                    if "error" in line:
-                        self.start_time_error = float(line.split('=')[1].strip())
-                    else:
-                        self.start_time = float(line.split('=')[1].strip())
+#                if "velocity" in line:
+#                    if "error" in line:
+#                        self.velocity_error = float(line.split('=')[1].strip())
+#                    else:
+#                        self.velocity = float(line.split('=')[1].strip())
+#                if "start" in line:
+#                    if "error" in line:
+#                        self.start_time_error = float(line.split('=')[1].strip())
+#                    else:
+#                        self.start_time = float(line.split('=')[1].strip())
                     
                 contents = line.split('\t')
                 if len(contents)>1: #find where we actually have a table
@@ -126,16 +140,15 @@ class Shock:
          
             
     def save_positions(self):
-        self.calculate_velocity()
         filename = "Data/"+self.shotID+"/Shock Dynamics"
         if self.label is not None:
             filename += " "+self.label
             
         with open(filename, 'w') as file:   #writes file
-            file.write( "Shock Velocity (km/s) = "+str(self.velocity)+"\n" )
-            file.write( "Shock Velocity error (km/s) = "+str(self.velocity_error)+"\n" )
-            file.write( "Shock start time (ns) = "+str(self.start_time)+"\n" )
-            file.write( "Shock start time error (ns) = "+str(self.start_time_error)+"\n" )
+            file.write( "Shock Velocity (km/s) = "+str(self.velocity())+"\n" )
+            file.write( "Shock Velocity error (km/s) = "+str(self.velocity(error=True))+"\n" )
+            #file.write( "Shock start time (ns) = "+str(self.position_at(5.6))+"\n" )
+            #file.write( "Shock start time error (ns) = "+str(self.start_time_error)+"\n" )
             
             #output all of the shock positions
             file.write( "\nTime (ns)\tPosition(mm)\n" )
@@ -271,8 +284,9 @@ class Shock:
             axTest.set_ylabel("Shock position [mm]")
             plt.grid(True)
             
-        self.calculate_velocity()
+        self.velocity()
         self.plot()
+        self.save_positions()
         
         
     def remove_frames(self, ignore_frames=[]):
@@ -307,7 +321,6 @@ class Shock:
         ax.set_ylabel("Position [mm]")
         ax.set_title("Shock position over time for "+self.shotID)
         plt.grid(True)
-        
         #plot linear trendline
         if trendline is True:
             slope, intercept, r_value, p_value, std_err = stats.linregress( plot_times,self.positions)
@@ -315,6 +328,4 @@ class Shock:
             yValues = xValues*slope +intercept
             yValues = numpy.array(yValues)*multiplier
             ax.plot( xValues,yValues, color+'--' )
-            
-        
         return ax

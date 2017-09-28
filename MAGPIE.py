@@ -26,7 +26,8 @@ class MAGPIE:
         for rog in self.rogowskis:
             self.currentStart += rog.currentStart
             self.currentStart_error += rog.currentStart_error
-            error_per_value += np.abs( rog.noise_range*rog.attenuator*rog.multiplier )
+            error_per_value += np.square( rog.noise_range*rog.attenuator*rog.multiplier ) #errors add in quadrature
+        error_per_value = np.sqrt(error_per_value)
         self.currentStart /= len(self.rogowskis)
         self.currentStart_error /= len(self.rogowskis)
         
@@ -122,35 +123,10 @@ class MAGPIE:
             file.write( "current maximus error (A) = "+str(self.currentMax_error)+"\n" )
             file.write( "current FWFM error (ns) = "+str(self.currentFWFM_error)+"\n" )
             file.write( "current peak time error (ns) = "+str(self.current_peak_error)+"\n" )
+
         
         
-        
-    def plotRogowskis(self, ax=None):
-        if ax is None:
-            fig, ax=plt.subplots()
-        for rog in self.rogowskis:
-            ax.plot(rog.time[:-10], rog.data[:-10])
-        plt.xlabel("Time [ns]")
-        plt.ylabel("Voltage [V]")
-        plt.title("Readings from Rogowskis for shot "+self.shotID)
-        plt.xlim( [0,3000] )
-        return ax
-        
-        
-            
-    def plotCurrent(self, ax=None):
-        if ax is None:
-            fig, ax=plt.subplots()
-        ax.plot(self.time, self.current, linestyle='--')
-        plt.xlabel("Time [ns]")
-        plt.ylabel("Current [A]")
-        plt.title("MAGPIE current for shot "+self.shotID)
-        plt.xlim( [0,3000] )
-        return ax
-        
-        
-        
-    def plot(self, plotType='current', ax=None, label=None, color=None, linestyle=None, times = [1000,2500]):
+    def plot(self, plotType='current', ax=None, label=None, color=None, linestyle=None, times = [0,1500]):
         if ax is None:  #create plot if none exists
             fig, ax=plt.subplots()
             
@@ -166,22 +142,31 @@ class MAGPIE:
                 data1,label1 = self.rogowskis[0].data*self.rogowskis[0].attenuator*self.rogowskis[0].multiplier ,"Probe 1 dIdt "+self.shotID
                 data2,label2 = self.rogowskis[1].data*self.rogowskis[1].attenuator*self.rogowskis[1].multiplier ,"Probe 2 dIdt "+self.shotID
         if "raw" in plotType.lower() or "voltage" in plotType.lower():
-            data1,label1 = self.rogowskis[0].data,"Probe 1 "+self.shotID
-            data2,label2 = self.rogowskis[1].data,"probe 2 "+self.shotID
+            if "1" in plotType:
+                data1,label1 = self.rogowskis[0].data,"Probe 1 "+self.shotID
+            elif "2" in plotType:
+                data1,label1 = self.rogowskis[1].data,"Probe 2 "+self.shotID
+            else:
+                data1,label1 = self.rogowskis[0].data,"Probe 1 "+self.shotID
+                data2,label2 = self.rogowskis[1].data,"probe 2 "+self.shotID
             
         if label is not None:   #set labels if we pass them to the function
             label1 = label
+
+        #apply current offset
+        plot_times = np.array(self.time) - self.currentStart
             
         #plot errors in current case
         if "current" in plotType.lower():
             errorsMin = np.array(self.current) - np.array(self.current_error)
             errorsMax = np.array(self.current) + np.array(self.current_error)
-            ax.fill_between(self.time, errorsMin,errorsMax, alpha=.5)
-            
+            ax.fill_between(plot_times, errorsMin,errorsMax, facecolor=color, alpha=.5)
+
+        #plot data            
         if data1 is not None:
-            ax.plot(self.time, data1, label=label1,color=color,linestyle=linestyle)
+            ax.plot(plot_times, data1, label=label1,color=color,linestyle=linestyle)
         if data2 is not None:
-            ax.plot(self.time, data2, label=label2)
+            ax.plot(plot_times, data2, label=label2)
 
         #set axis
         ax.set_xlabel("Time [ns]")

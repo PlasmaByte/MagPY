@@ -9,6 +9,8 @@ class BdotProbe:
         #dimensions (height, innerRadius and outRadius) should be given in mm
         self.time = scopeChannel.time
         self.data = scopeChannel.data
+        noiseValues = 1000
+        self.noise_range = ( max(self.data[0:noiseValues]) - min(self.data[0:noiseValues]) )/2
         self.attenuator = attenuator
         self.area = area/1e6 #converts to m^2
 

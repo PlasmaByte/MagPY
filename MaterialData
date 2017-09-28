@@ -1,0 +1,14 @@
+Material	Composition	Conductivity at RTP	Magnetic permeability at RTP	Solidus [K]	Liquidus [K]	Heat capacity [J/kg/K]	Thermal Conductivity [W/m/k]	Debye Temperature [K]	Density [kg/m3]
+Brass		1.57E+07		9.00E+02					8.50E+03
+Chromium		2.72E+07							7.80E+03
+Iron		1.13E+07		1.54E+03				420	7.80E+03
+Aluminium		3.92E+07						390	2.71
+Tungsten		5.50E+06						350	1.93E+04
+aisi 304	Fe=70 Cr=19 Ni=9	1.38E+06	1.01E+00	1127.00	1182.00	500.00	16.20		8.03E+03
+Lead								88	1.13E+04
+Copper		6.33E+07		1083				320	8.93E+03
+									
+#conductivity, melting point from "Magnetic Fields" Heinz E. Knoepfel page 476 onwards									
+#density from "Magnetic Fields" Heinz E. Knoepfel page 506 onwards									
+#deby temperature from "Magnetic Fields" Heinz E. Knoepfel page 506 onwards									
+#AISI data http://asm.matweb.com/search/SpecificMaterial.asp?bassnum=mq304a									

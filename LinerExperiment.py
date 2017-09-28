@@ -6,7 +6,7 @@ from SourceCode.ShotData import ShotData
 from SourceCode.BdotPair import BdotPair
 from SourceCode.Interferometry import Interferometry
 from SourceCode.MAGPIE import MAGPIE
-from SourceCode.Gas import Gas
+from SourceCode.Material import Material
 from SourceCode.Shock import Shock
 import skimage.measure
 import matplotlib.pyplot as plt
@@ -74,7 +74,7 @@ class LinerExperiment:
                     self.bdotPairs.append( BdotPair(file=file, shotID=shotID) )
                       
         #setup the gas fill
-        self.gas_fill = Gas(gas_element, pressure = gas_pressure/1000)
+        self.gas_fill = Material(gas_element, pressure = gas_pressure/1000)
         
         
         

@@ -20,7 +20,7 @@ class Rogowski:
         noiseValues = 1000
         self.currentStart = 0
         threshold = max(self.data[0:noiseValues])*self.attenuator    #first few hundred are noise so use that to find maximum noise
-        self.noise_range = max(self.data[0:noiseValues]) - min(self.data[0:noiseValues])
+        self.noise_range = (max(self.data[0:noiseValues]) - min(self.data[0:noiseValues]))/2
         
         #find the point where we go above zero more than 50 times in a row
         #to ensure this is the true signal

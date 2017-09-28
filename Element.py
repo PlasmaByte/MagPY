@@ -38,14 +38,16 @@ class Element:
             for line in file:
                 if "Symbol" not in line:
                     contents = line.split('\t')
-    
-                    if contents[0].lower()==label or contents[1].lower()==label or int(contents[2])==label:
-                        self.symbol = contents[0]
-                        self.name = contents[1]
-                        self.atomic_number = int(contents[2])
-                        self.atomic_mass = float(contents[3])
-                        print(self.name+" data loaded")
-                        break
+                    if len(contents)>2:
+                        if contents[0].lower()==label.lower() or contents[1].lower()==label.lower() or int(contents[2])==label:
+                            self.symbol = contents[0]
+                            self.name = contents[1]
+                            self.atomic_number = int(contents[2])
+                            self.atomic_mass = float(contents[3])
+                            print(self.name+" data loaded")
+                            break
+        if self.name is None:
+            print("No elemental data found for "+label)
                 
                 
     def protons(self):

@@ -5,6 +5,7 @@ import numpy as np
 import scipy.integrate
 from SourceCode.ScopeChannel import ScopeChannel
 from SourceCode.BdotProbe import BdotProbe
+from SourceCode.MAGPIE import MAGPIE
 import matplotlib.pyplot as plt
 
 
@@ -40,6 +41,31 @@ class BdotPair:
         #integrate dBdt to get B
         self.Bfield = scipy.integrate.cumtrapz( self.dBdt ,self.time )/1e9   #1e9 as time is in ns
         self.Bfield = np.append(self.Bfield, self.Bfield[-1] )  #adds extra index to match length of time
+        
+        
+        #get the errors from probes - add in quadrature
+        Bfield_error = np.square( self.Bdot1.noise_range * self.Bdot1.attenuator / self.Bdot1.area) \
+                        + np.square( self.Bdot2.noise_range * self.Bdot2.attenuator / self.Bdot2.area)
+        Bfield_error = np.sqrt( Bfield_error )
+        self.Efield_error = np.abs( self.Bdot1.noise_range * self.Bdot1.attenuator) \
+                        + np.abs( self.Bdot2.noise_range * self.Bdot2.attenuator)
+        self.Efield_error = np.sqrt( self.Efield_error )
+        
+        #get the current start from the MAGPIE class
+        M = MAGPIE(shotID)
+        currentStart = M.currentStart
+        
+        #integrate to obtain B field and error
+        self.Bfield = [0]
+        self.Bfield_errors = [0]
+        for i in range(1,len(self.dBdt)):   #yeah! manual integration!!!
+            dt = (self.time[i]-self.time[i-1])/1e9
+            if self.time[i]<currentStart:
+                self.Bfield.append(0)
+                self.Bfield_errors.append(0)
+            else:
+                self.Bfield.append( self.Bfield[i-1] + self.dBdt[i]*dt )
+                self.Bfield_errors.append( self.Bfield_errors[i-1] + Bfield_error*dt)
         
         print("B-dot probe created")
 
@@ -122,17 +148,38 @@ class BdotPair:
         if "fields" in plotType.lower() or "both" in plotType.lower() or "all" in plotType.lower():
             data1,label1 = self.Efield,"E field "+self.shotID
             data2,label2 = self.Bfield,"B field "+self.shotID
+        
         if "raw" in plotType.lower() or "voltage" in plotType.lower():
-            data1,label1 = self.Bdot1.data,"Probe 1 "+self.shotID
-            data2,label2 = self.Bdot2.data,"probe 2 "+self.shotID
+            if "1" in plotType:
+                data1,label1 = self.Bdot1.data,"Probe 1 "+self.shotID
+            elif "2" in plotType:
+                data1,label1 = self.Bdot2.data,"Probe 2 "+self.shotID
+            else:
+                data1,label1 = self.Bdot1.data,"Probe 1 "+self.shotID
+                data2,label2 = self.Bdot2.data,"probe 2 "+self.shotID
+        
+        #apply current offset
+        M = MAGPIE(self.shotID)
+        plot_times = np.array(self.time) - M.currentStart
+            
+        #plot errors
+        if "B" in plotType or "E" in plotType:
+            errors = None
+            if "B" in plotType:
+                errors = self.Bfield_errors
+            else:
+                errors = [self.Efield_error]*len(data1)
+            errorsMin = np.array(data1) - np.array(errors)
+            errorsMax = np.array(data1) + np.array(errors)
+            ax.fill_between(plot_times, errorsMin,errorsMax, facecolor=color, alpha=.5)
         
         #plot the data
         if label is not None:
             label1 = label
         if data1 is not None:
-            ax.plot(self.time, data1, label=label1,color=color,linestyle=linestyle)
+            ax.plot(plot_times, data1, label=label1,color=color,linestyle=linestyle)
         if data2 is not None:
-            ax.plot(self.time, data2, label=label2)
+            ax.plot(plot_times, data2, label=label2)
         
         #make graph look pretty
         plt.xlabel("Time [ns]")
